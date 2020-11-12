@@ -284,7 +284,7 @@ def influxdb_update(value, prot='http', ip='127.0.0.1', port='8086', db="smartho
     req_url = "{}://{}:{}/write?db={}&precision=s".format(prot, ip, port, db)
     # Something like post_data = "energy,type=heat,device=landisgyr value=10"
     # Alternatively, like post_data = "energy landisgyr=10"
-    post_data = "{}{:d}".format(query, int(value_joule))
+    post_data = "{}{:d}".format(querybase, int(value_joule))
 
     if debug > 0:
         print("Pushing data '{}' to influxdb".format(post_data))
