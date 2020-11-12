@@ -11,6 +11,10 @@
 # Modified by Ronald van der Meer, Frank Reijn and Paul Bonnemaijers for the
 # Kamstrup Multical 402
 #
+# Modified by Tim van Werkhoven 20201112 for generic use (e.g. mqtt/influxdb).
+# Also pruned superfluous meter reading from script to save meter battery 
+# life (previous version read all 30 vars and discarded unused data)
+#
 # Usage: __file__ <ComPort>
 #
 
@@ -21,20 +25,18 @@ import serial
 import math
 import sys
 import datetime
-import json
-import urllib
-import urllib.request
+import requests
+import paho.mqtt.client as paho
+# import urllib
+# import urllib.request
 import codecs
 
 # Variables
-
 reader = codecs.getreader("utf-8")
 
-domoip = "192.168.1.12"
-domoport = "8080"
 debug = 1
 
-kamstrup_402_var = {                # Decimal Number in Command
+multical_var = {                # Decimal Number in Command for Kamstrup Multical
  0x003C: "Heat Energy (E1)",         #60
  0x0050: "Power",                   #80
  0x0056: "Temp1",                   #86
@@ -270,7 +272,52 @@ class kamstrup(object):
 
         return (x, u)
             
+def influxdb_update(value, prot='http', ip='127.0.0.1', port='8086', db="smarthome", querybase="energy,type=heat,device=multical value="):
+    """
+    Push update to influxdb with second precision
+    """
 
+    # Value is in GJ, we convert to Joule to get SI in influxdb
+    value_joule = value*1000000
+    
+    # Something like req_url = "http://localhost:8086/write?db=smarthometest&precision=s"
+    req_url = "{}://{}:{}/write?db={}&precision=s".format(prot, ip, port, db)
+    # Something like post_data = "energy,type=heat,device=landisgyr value=10"
+    # Alternatively, like post_data = "energy landisgyr=10"
+    post_data = "{}{:d}".format(query, int(value_joule))
+
+    if debug > 0:
+        print("Pushing data '{}' to influxdb".format(post_data))
+
+
+    try:
+        httpresponse = requests.post(req_url, data=post_data, verify=False, timeout=5)
+    except Exception as inst:
+        print("Could not update meter reading: {}".format(inst))
+        pass
+
+def mqtt_update(payload, ip, port, user, passwd, topic):
+    """
+    Publish to mqtt
+
+    http://www.steves-internet-guide.com/publishing-messages-mqtt-client/
+    https://pypi.org/project/paho-mqtt/#publishing
+    """
+    # broker="192.168.1.184"
+    # port=1883
+
+    client1 = paho.Client(client_id="multical")
+    client1.username_pw_set(user, passwd)
+
+    try:
+        client1.connect(ip,int(port))
+    except:
+        print('Could not connect to mqtt broker')
+
+    try:
+        ret = client1.publish(topic, payload)
+    except:
+        print('Could not publish mqtt value')
 
 
 if __name__ == "__main__":
@@ -290,118 +337,32 @@ if __name__ == "__main__":
     try:
         index = str( sys.argv[2] )
     except IndexError:
-        print("Domoticz variables required. This script can not be executed without it")
+        print("Multical commands required.")
         sys.exit()
 
     index = index.split(',')
 
-    if debug > 0: 
+    if debug > 0:
         print("Parameter specified: ")
         for i in index:
             print("+ " + i)
 
     foo = kamstrup( comport )
-    heat_timestamp=datetime.datetime.strftime(datetime.datetime.today(), "%Y-%m-%d %H:%M:%S" )
+    heat_timestamp = datetime.datetime.strftime(datetime.datetime.today(), "%Y-%m-%d %H:%M:%S" )
     
     # This command seems to have different outputs, left out for that.
     #
-    # kamstrup_402_var = int(kamstrup_402_var * 1000)
+    # multical_var = int(multical_var * 1000)
     
-print ("=======================================================================================")
-print ("Kamstrup Multical 402 serial optical data received: %s" % heat_timestamp)
-print ("Meter vendor/type: Kamstrup M402")
-print ("---------------------------------------------------------------------------------------")
 
-for i in kamstrup_402_var:
-    x,u = foo.readvar(i)
-    r = 0
-    
-    print("%-25s" % kamstrup_402_var[i], x, u)
+    for i in index:
+        ii = int(i)
+        multical_var[ii]
+        x,u = foo.readvar(ii)
         
+        print("{},{},{}".format(multical_var[ii], x, u))
 
-    for y in index:
-        paramater = y.split(':')
-        idx = int(paramater[0],0)
-        dcNr = int(paramater[1],0)
-        opt = int(paramater[2],0)
+    # influxdb_update(x)
+    # mqtt_update(payload, ip, port, user, passwd, topic)
 
-        try:
-            compare_idx = int(paramater[3],0)
-        except IndexError:
-            compare_idx = 0
-            
         
-        # If decimal number matches the command given as argv[2]
-        if i == dcNr:
-            value = round(x,2)
-
-            # Retrieve devicename and devicedata
-            requestGet = ( "http://" + str(domoip) + ":" + str(domoport) + "/json.htm?type=devices&rid=" + str(idx) )
-            device_data = json.load(reader(urllib.request.urlopen(requestGet)))
-            device_name = device_data['result'][0]['Name']
-            device_value = device_data['result'][0]['Data']
-            if debug > 0:
-                print("+ Last stored value for device: " + device_name + " was " + device_value)
-
-            
-            if debug > 0: 
-                print("+ Processing parameter: " + str(y) + "")
-
-            # 0 = Update current
-            # 1 = Substraction
-            # 2 = Addition
-            if opt == 0:
-                # Submit the current value to the device
-                if debug > 0:
-                    print("  + F" + str(opt) + " Debug: Overwrite: " + str(device_name) + " (idx: " + str(idx) + ") with latest value: " + str(value)) 
-                dummyvar = 0
-            elif opt == 1:
-                if compare_idx > 0:
-                    requestGet = ( "http://" + str(domoip) + ":" + str(domoport) + "/json.htm?type=devices&rid=" + str(compare_idx) )
-                    device_compare_data = json.load(reader(urllib.request.urlopen(requestGet)))
-                    device_compare_name = device_compare_data['result'][0]['Name']
-                    device_compare_value = device_compare_data['result'][0]['Data']
-                    device_compare_value = device_compare_value.split(' ')
-                    device_compare_value = device_compare_value[0]
-                    diff = float(value) - float(device_compare_value)
-                    diff = round(diff,2) 
-
-                    if debug > 0: 
-                        print("  + F" + str(opt) + " Debug: Substract " + str(device_compare_value) + " (idx:" + str(compare_idx) + ") from " + str(value) + " (idx:" + str(idx) + ") = " + str(diff) )
-                    
-                    value = diff
-
-            elif opt == 2:
-                if compare_idx > 0:
-                    device_value = device_value.split(' ')
-                    device_value = device_value[0]
-                    
-                    requestGet = ( "http://" + str(domoip) + ":" + str(domoport) + "/json.htm?type=devices&rid=" + str(compare_idx) )
-                    device_compare_data = json.load(reader(urllib.request.urlopen(requestGet)))
-                    device_compare_name = device_compare_data['result'][0]['Name']
-                    device_compare_value = device_compare_data['result'][0]['Data']
-                    device_compare_value = device_compare_value.split(' ')
-                    device_compare_value = device_compare_value[0]
-                    diff = float(value) - float(device_compare_value)
-                    diff = round(diff,2) 
-                    
-                    addup = float(diff) + float(device_value)
-                    addup = round(addup,2) 
-                    
-                    if debug > 0: 
-                        print("  + F" + str(opt) + " Debug: Addition " + str(device_value) + " (idx:" + str(idx) + ") + " + str(diff) + " (" + str(value) + " (idx:" + str(idx) + ") - " + str(device_compare_value) + " (idx:" + str(compare_idx) + ")) = " + str(addup) )
-
-                    value = addup
-
-            # Upload the current value to the device
-            print("  + F" + str(opt) + " Submit value " + str(value) + " to '" + str(device_name) + "' (idx: " + str(idx) + ")") 
-            requestPost = ( "http://" + str(domoip) + ":" + str(domoport) + "/json.htm?type=command&param=udevice&idx=" + str(idx) + "&svalue=" + str(value) )
-            #print(requestPost)
-            resultPost = urllib.request.urlopen(requestPost)
-            
-        
-print ("---------------------------------------------------------------------------------------")
-print ("End data received: %s" % heat_timestamp)
-print ("=======================================================================================") 
-
-
