@@ -278,7 +278,7 @@ def influxdb_update(value, prot='http', ip='127.0.0.1', port='8086', db="smartho
     """
 
     # Value is in GJ, we convert to Joule to get SI in influxdb
-    value_joule = value*1000000
+    value_joule = value*1000000000
     
     # Something like req_url = "http://localhost:8086/write?db=smarthometest&precision=s"
     req_url = "{}://{}:{}/write?db={}&precision=s".format(prot, ip, port, db)
