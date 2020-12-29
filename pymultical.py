@@ -70,6 +70,40 @@ multical_var = {                # Decimal Number in Command for Kamstrup Multica
  0x03EC: "HourCounter",             #1004
 }
 
+multical_var_si = {                # Decimal Number in Command for Kamstrup Multical
+ 0x003C: 1E+0,       # source data already in Joule - "Heat Energy (E1)",         #60
+ 0x0050: 1E-3,       # source data in milliWatt - "Power",                   #80
+ 0x0056: 1E-9,       # source data in nanoCelcius - "Temp1",                   #86
+ 0x0057: 1E-9,       # source data in nanoCelcius - "Temp2",                   #87
+ 0x0059: 1E-9,       # source data in nanoCelcius - "Tempdiff",                #89
+ 0x004A: 1E-12/3600, # source data nanoliter/hour - "Flow",                    #74
+ 0x0044: 1E+0,       # source data TBD - "Volume",                  #68
+ 0x008D: 1E+0,       # source data TBD - "MinFlow_M",               #141
+ 0x008B: 1E+0,       # source data TBD - "MaxFlow_M",               #139
+ 0x008C: 1E+0,       # source data TBD - "MinFlowDate_M",           #140
+ 0x008A: 1E+0,       # source data TBD - "MaxFlowDate_M",           #138
+ 0x0091: 1E+0,       # source data TBD - "MinPower_M",              #145
+ 0x008F: 1E+0,       # source data TBD - "MaxPower_M",              #143
+ 0x0095: 1E+0,       # source data TBD - "AvgTemp1_M",              #149
+ 0x0096: 1E+0,       # source data TBD - "AvgTemp2_M",              #150
+ 0x0090: 1E+0,       # source data TBD - "MinPowerDate_M",          #144
+ 0x008E: 1E+0,       # source data TBD - "MaxPowerDate_M",          #142
+ 0x007E: 1E+0,       # source data TBD - "MinFlow_Y",               #126
+ 0x007C: 1E+0,       # source data TBD - "MaxFlow_Y",               #124
+ 0x007D: 1E+0,       # source data TBD - "MinFlowDate_Y",           #125
+ 0x007B: 1E+0,       # source data TBD - "MaxFlowDate_Y",           #123
+ 0x0082: 1E+0,       # source data TBD - "MinPower_Y",              #130
+ 0x0080: 1E+0,       # source data TBD - "MaxPower_Y",              #128
+ 0x0092: 1E+0,       # source data TBD - "AvgTemp1_Y",              #146
+ 0x0093: 1E+0,       # source data TBD - "AvgTemp2_Y",              #147
+ 0x0081: 1E+0,       # source data TBD - "MinPowerDate_Y",          #129
+ 0x007F: 1E+0,       # source data TBD - "MaxPowerDate_Y",          #127
+ 0x0061: 1E+0,       # source data TBD - "Temp1xm3",                #97
+ 0x006E: 1E+0,       # source data TBD - "Temp2xm3",                #110
+ 0x0071: 1E+0,       # source data TBD - "Infoevent",               #113
+ 0x03EC: 1E+0,       # source data TBD - "HourCounter",             #1004
+}
+
 #######################################################################
 # Units, provided by Erik Jensen
 
@@ -359,10 +393,12 @@ if __name__ == "__main__":
         ii = int(i)
         multical_var[ii]
         x,u = foo.readvar(ii)
-        
-        print("{},{},{}".format(multical_var[ii], x, u))
 
-    # influxdb_update(x)
+        # Convert to SI units
+        xsi = x * multical_var_si[ii]
+        
+        print("{},{},{}".format(multical_var[ii], xsi, u))
+
+    
+    # influxdb_update(xsi)
     # mqtt_update(payload, ip, port, user, passwd, topic)
-
-        
