@@ -384,10 +384,6 @@ if __name__ == "__main__":
     foo = kamstrup( comport )
     heat_timestamp = datetime.datetime.strftime(datetime.datetime.today(), "%Y-%m-%d %H:%M:%S" )
     
-    # This command seems to have different outputs, left out for that.
-    #
-    # multical_var = int(multical_var * 1000)
-    
 
     for i in index:
         ii = int(i)
