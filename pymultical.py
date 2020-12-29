@@ -272,7 +272,7 @@ class kamstrup(object):
 
         return (x, u)
             
-def influxdb_update(value, prot='http', ip='127.0.0.1', port='8086', db="smarthome", querybase="energy,type=heat,device=multical value="):
+def influxdb_update(value, prot='http', ip='127.0.0.1', port='8086', db="smarthome", querybase="energy,quantity=heat,source=multical,type=consumption value="):
     """
     Push update to influxdb with second precision
     """
