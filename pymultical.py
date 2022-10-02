@@ -25,10 +25,6 @@ import serial
 import math
 import sys
 import datetime
-import requests
-import paho.mqtt.client as paho
-# import urllib
-# import urllib.request
 import codecs
 
 # Variables
@@ -171,9 +167,6 @@ class kamstrup(object):
             bytesize = serial.EIGHTBITS,
             parity = serial.PARITY_NONE,
             stopbits = serial.STOPBITS_TWO)
-#            xonxoff = 0,
-#            rtscts = 0)
-#           timeout = 20
 
     def debug(self, dir, b):
         for i in b:
@@ -260,15 +253,19 @@ class kamstrup(object):
         # encoded in the response.  Havn't tried.
 
         self.send(0x80, (0x3f, 0x10, 0x01, nbr >> 8, nbr & 0xff))
+        time.sleep(0.2)
 
         b = self.recv()
         if b == None:
+            print("b=none")
             return (None, None)
         if b[0] != 0x3f or b[1] != 0x10:
+            print("b is not 0x3f or 0x10")
             return (None, None)
         
         if b[2] != nbr >> 8 or b[3] != nbr & 0xff:
-           return (None, None)
+            print("bliep")
+            return (None, None)
 
         if b[4] in units:
             u = units[b[4]]
@@ -290,7 +287,7 @@ class kamstrup(object):
             i = -i
         x *= i
 
-        if False:
+        if True:
             # Debug print
             s = ""
             for i in b[:4]:
@@ -305,53 +302,6 @@ class kamstrup(object):
             print(s, "=", x, units[b[4]])
 
         return (x, u)
-            
-def influxdb_update(value, prot='http', ip='127.0.0.1', port='8086', db="smarthome", querybase="energy,quantity=heat,source=multical,type=consumption value="):
-    """
-    Push update to influxdb with second precision
-    """
-
-    # Value is in GJ, we convert to Joule to get SI in influxdb
-    value_joule = value*1000000000
-    
-    # Something like req_url = "http://localhost:8086/write?db=smarthometest&precision=s"
-    req_url = "{}://{}:{}/write?db={}&precision=s".format(prot, ip, port, db)
-    # Something like post_data = "energy,type=heat,device=landisgyr value=10"
-    # Alternatively, like post_data = "energy landisgyr=10"
-    post_data = "{}{:d}".format(querybase, int(value_joule))
-
-    if debug > 0:
-        print("Pushing data '{}' to influxdb".format(post_data))
-
-
-    try:
-        httpresponse = requests.post(req_url, data=post_data, verify=False, timeout=5)
-    except Exception as inst:
-        print("Could not update meter reading: {}".format(inst))
-        pass
-
-def mqtt_update(payload, ip, port, user, passwd, topic):
-    """
-    Publish to mqtt
-
-    http://www.steves-internet-guide.com/publishing-messages-mqtt-client/
-    https://pypi.org/project/paho-mqtt/#publishing
-    """
-    # broker="192.168.1.184"
-    # port=1883
-
-    client1 = paho.Client(client_id="multical")
-    client1.username_pw_set(user, passwd)
-
-    try:
-        client1.connect(ip,int(port))
-    except:
-        print('Could not connect to mqtt broker')
-
-    try:
-        ret = client1.publish(topic, payload)
-    except:
-        print('Could not publish mqtt value')
 
 
 if __name__ == "__main__":
@@ -368,33 +318,15 @@ if __name__ == "__main__":
     #
     #command = int( sys.argv[2], 0)
 
-    try:
-        index = str( sys.argv[2] )
-    except IndexError:
-        print("Multical commands required.")
-        sys.exit()
+    foo = kamstrup(comport)
 
-    index = index.split(',')
+    i = 60
 
-    if debug > 0:
-        print("Parameter specified: ")
-        for i in index:
-            print("+ " + i)
+    for x in range(1,10):
+        print("attempt {}".format(x))
 
-    foo = kamstrup( comport )
-    heat_timestamp = datetime.datetime.strftime(datetime.datetime.today(), "%Y-%m-%d %H:%M:%S" )
-    
-
-    for i in index:
         ii = int(i)
         multical_var[ii]
-        x,u = foo.readvar(ii)
-
-        # Convert to SI units
-        xsi = x * multical_var_si[ii]
-        
-        print("{},{},{}".format(multical_var[ii], xsi, u))
-
-    
-    # influxdb_update(xsi)
-    # mqtt_update(payload, ip, port, user, passwd, topic)
+        x, u = foo.readvar(ii)
+        print("{},{},{}".format(multical_var[ii], x, u))
+        time.sleep(1) 
